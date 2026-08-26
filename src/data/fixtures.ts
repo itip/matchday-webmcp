@@ -1,7 +1,9 @@
+import footballData from './generated/football-data.json';
+
 export type MatchStatus = 'scheduled' | 'live' | 'finished';
 export type Fixture = { id: string; competition: string; competitionShort: string; round: string; kickoff: string; home: string; away: string; status: MatchStatus; homeScore?: number; awayScore?: number; minute?: string; venue?: string };
 
-export const fixtures: Fixture[] = [
+const demoFixtures: Fixture[] = [
   { id: 'ucl-qar-fer', competition: 'Champions League qualifying', competitionShort: 'UEFA', round: 'Play-offs · second leg', kickoff: '2026-08-26T17:45:00Z', home: 'Qarabag', away: 'Ferencvaros', status: 'finished', homeScore: 2, awayScore: 1, venue: 'Tofiq Bahramov Stadium' },
   { id: 'ucl-cel-bas', competition: 'Champions League qualifying', competitionShort: 'UEFA', round: 'Play-offs · second leg', kickoff: '2026-08-26T19:00:00Z', home: 'Celtic', away: 'Basel', status: 'live', homeScore: 1, awayScore: 1, minute: "74'", venue: 'Celtic Park' },
   { id: 'ucl-ben-fen', competition: 'Champions League qualifying', competitionShort: 'UEFA', round: 'Play-offs · second leg', kickoff: '2026-08-26T20:00:00Z', home: 'Benfica', away: 'Fenerbahce', status: 'scheduled', venue: 'Estadio da Luz' },
@@ -20,6 +22,19 @@ export const fixtures: Fixture[] = [
   { id: 'pl-ars-liv', competition: 'Premier League', competitionShort: 'ENGLAND', round: 'Matchday 3', kickoff: '2026-09-05T16:30:00Z', home: 'Arsenal', away: 'Liverpool', status: 'scheduled', venue: 'Emirates Stadium' },
 ];
 
-export const teamAliases: Record<string, string> = { telford: 'AFC Telford United', 'afc telford': 'AFC Telford United', 'afc telford united': 'AFC Telford United', bucks: 'AFC Telford United', liverpool: 'Liverpool', 'liverpool fc': 'Liverpool', celtic: 'Celtic', chelsea: 'Chelsea', 'man utd': 'Manchester United', 'manchester united': 'Manchester United' };
+export const fixtures: Fixture[] = footballData.fixtures.length
+  ? (footballData.fixtures as Fixture[])
+  : demoFixtures;
+
+export const dataUpdatedAt = footballData.generatedAt;
+export const dataSource = footballData.source;
+export const competitionCount = footballData.competitions.length;
+
+export const teamAliases: Record<string, string> = Object.fromEntries(
+  Object.entries(footballData.aliases).map(([alias, teamId]) => [
+    alias,
+    footballData.teams.find((team) => team.id === teamId)?.name ?? alias,
+  ]),
+);
 export const standings: Array<[string, number, number]> = [['Arsenal', 6, 6], ['Liverpool', 4, 2], ['Chelsea', 4, 2], ['Newcastle', 3, 1], ['Brighton', 3, 0]];
 export function resolveTeam(query: string) { const normalized = query.trim().toLowerCase(); if (teamAliases[normalized]) return teamAliases[normalized]; const teams = [...new Set(fixtures.flatMap((fixture) => [fixture.home, fixture.away]))]; return teams.find((team) => team.toLowerCase().includes(normalized)); }

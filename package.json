@@ -11,7 +11,9 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "lint": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "data:audit": "node --env-file=.env.local scripts/audit-sportmonks.mjs",
+    "data:import": "node --env-file=.env.local scripts/import-sportmonks.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.6",
