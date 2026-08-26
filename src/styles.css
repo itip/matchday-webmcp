@@ -40,12 +40,31 @@ h1 { margin:0; font-size:clamp(48px,6vw,76px); line-height:.92; letter-spacing:-
 .team-search input:focus { border-color:var(--ink); box-shadow:0 0 0 3px #c9fa3c80; }
 .team-search button { padding:0 18px; border:0; border-radius:0 7px 7px 0; background:var(--navy); color:white; font-size:12px; font-weight:700; cursor:pointer; }
 .date-strip { display:grid; grid-template-columns:repeat(7,1fr) 72px; border-block:1px solid var(--line); background:#e8ebe7; }
-.date-strip button { min-height:76px; border:0; border-right:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; }
+.date-strip button,.date-strip .calendar-button { min-height:76px; border:0; border-right:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; }
 .date-strip button:last-child { border-right:0; }
 .date-strip button span { display:block; font-size:10px; font-weight:700; letter-spacing:.08em; }
 .date-strip button strong { display:block; margin-top:4px; font-family:'Barlow Condensed',sans-serif; font-size:26px; }
 .date-strip button.selected { margin:-1px 0; background:var(--navy); color:white; box-shadow:inset 0 -4px var(--lime); }
-.date-strip .calendar-button { background:#f6f7f4; }
+.date-strip .calendar-button { display:grid; place-items:center; position:relative; padding:15px 4px; border-right:0; background:#f6f7f4; text-align:center; }
+.date-strip .calendar-button:focus-within { outline:3px solid var(--lime); outline-offset:-3px; }
+.calendar-button span { display:block; font-size:10px; font-weight:700; letter-spacing:.08em; }
+.calendar-button strong { display:block; margin-top:4px; font-family:'Barlow Condensed',sans-serif; font-size:26px; }
+.calendar-button input { width:100%; height:100%; position:absolute; inset:0; opacity:0; cursor:pointer; }
+.fixture-filters { min-height:58px; display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid var(--line); background:white; }
+.filter-intro { min-width:112px; padding-right:12px; border-right:1px solid var(--line); }
+.filter-intro span,.filter-intro strong { display:block; }
+.filter-intro span { color:var(--muted); font-size:8px; font-weight:800; letter-spacing:.1em; }
+.filter-intro strong { margin-top:3px; font-size:11px; }
+.fixture-filters details { position:relative; }
+.fixture-filters summary { min-width:145px; display:flex; justify-content:space-between; gap:18px; padding:9px 11px; border:1px solid var(--line); border-radius:5px; color:#4d5a62; font-size:11px; font-weight:600; cursor:pointer; list-style:none; }
+.fixture-filters summary::-webkit-details-marker { display:none; }
+.fixture-filters summary::after { content:'▾'; color:#899399; }
+.fixture-filters summary b { margin-left:auto; padding:1px 6px; border-radius:10px; background:#edf0ed; color:var(--ink); font-size:9px; }
+.filter-options { width:280px; max-height:310px; overflow:auto; display:grid; grid-template-columns:1fr; position:absolute; z-index:20; top:calc(100% + 5px); left:0; padding:8px; border:1px solid var(--line); border-radius:7px; background:white; box-shadow:0 12px 30px #0b182226; }
+.filter-options label { display:flex; align-items:center; gap:9px; padding:8px; border-radius:4px; color:#435159; font-size:11px; cursor:pointer; }
+.filter-options label:hover { background:#f2f5ef; }
+.filter-options input { accent-color:#0b1822; }
+.clear-filters { margin-left:auto; border:0; border-bottom:1px solid #8a969c; background:transparent; color:#53616a; font-size:10px; cursor:pointer; }
 .content-grid { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:24px; margin-top:24px; }
 .results-column { min-width:0; }
 .results-toolbar { min-height:45px; display:flex; align-items:end; gap:12px; margin-bottom:10px; }
@@ -126,7 +145,8 @@ footer { min-height:130px; display:grid; grid-template-columns:1fr minmax(250px,
   .topbar { padding-inline:16px; } .topbar nav { display:none; } .brand { font-size:20px; } .menu-button { font-size:11px; }
   .competition-nav>div { padding:0; } main { padding-inline:14px; }
   .score-hero { align-items:stretch; flex-direction:column; padding-top:34px; } .team-search { width:100%; }
-  .date-strip { overflow-x:auto; grid-template-columns:repeat(8,minmax(68px,1fr)); } .date-strip button { min-height:68px; }
+  .date-strip { overflow-x:auto; grid-template-columns:repeat(8,minmax(68px,1fr)); } .date-strip button,.date-strip .calendar-button { min-height:68px; }
+  .fixture-filters { align-items:stretch; flex-wrap:wrap; } .filter-intro { width:100%; border-right:0; } .fixture-filters details { flex:1; } .fixture-filters summary { min-width:0; } .filter-options { width:min(280px,calc(100vw - 28px)); } .clear-filters { margin-left:0; }
   .mobile-filter-row { display:flex; gap:8px; margin-top:14px; } .mobile-filter-row button { padding:7px 12px; border:1px solid var(--line); border-radius:20px; background:white; color:var(--muted); font-size:10px; text-transform:capitalize; } .mobile-filter-row button.active { background:var(--navy); color:white; }
   .results-toolbar { margin-top:18px; } .fixture-row { grid-template-columns:1fr 58px 1fr 20px; padding-inline:5px; } .team { gap:5px; font-size:11px; } .team i { width:27px; height:27px; font-size:7px; }
   .panel-heading { padding:15px; } .panel-heading h2 { font-size:21px; } .competition-mark { width:32px; height:32px; }
