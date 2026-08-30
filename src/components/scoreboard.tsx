@@ -105,6 +105,21 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   }, []);
   useEffect(() => { toolsDialogOpen && toolsDialog.current?.showModal(); }, [toolsDialogOpen]);
   useEffect(() => {
+    if (!calendarOpen && !selectedFixture && !toolsDialogOpen) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.documentElement.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [calendarOpen, selectedFixture, toolsDialogOpen]);
+  useEffect(() => {
     if (!searchOpen) return;
     function closeSearch(event: PointerEvent) {
       if (!searchMenu.current?.contains(event.target as Node)) setSearchOpen(false);
