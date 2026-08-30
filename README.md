@@ -110,7 +110,7 @@ The repository includes Cloudflare-compatible Vite and Worker configuration. Onc
 npm run deploy
 ```
 
-For the first public deployment, connect this GitHub repository in Cloudflare or deploy with Wrangler, then configure any required D1 binding and secrets in Cloudflare rather than committing them.
+For the first public deployment, connect this GitHub repository in Cloudflare or deploy with Wrangler. The current application reads its checked-in fixture snapshot and does not require D1 or any production secrets. A D1 binding can be added later when the application is changed to query the prepared database schema at runtime.
 
 ## Accessibility
 
