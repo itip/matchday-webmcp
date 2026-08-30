@@ -56,9 +56,13 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const [calendarMonth, setCalendarMonth] = useState(search.date.slice(0, 7));
   const [selectedFixture, setSelectedFixture] = useState<Fixture>();
   const [followedCompetitions, setFollowedCompetitions] = useState<string[]>([]);
+  const [followingOpen, setFollowingOpen] = useState(false);
   const [openFilter, setOpenFilter] = useState<'countries' | 'competitions' | null>(null);
   const calendarDialog = useRef<HTMLDialogElement>(null);
   const fixtureDialog = useRef<HTMLDialogElement>(null);
+  const followingMenu = useRef<HTMLDivElement>(null);
+  const followingButton = useRef<HTMLButtonElement>(null);
+  const followingLoaded = useRef(false);
   const filterBar = useRef<HTMLElement>(null);
   const countryFilterButton = useRef<HTMLButtonElement>(null);
   const competitionFilterButton = useRef<HTMLButtonElement>(null);
@@ -71,6 +75,33 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     calendarDialog.current?.showModal();
   }, [calendarOpen, search.date]);
   useEffect(() => { selectedFixture && fixtureDialog.current?.showModal(); }, [selectedFixture]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('matchday-followed-competitions') ?? '[]');
+      if (Array.isArray(saved)) setFollowedCompetitions(saved.filter((competition): competition is string => typeof competition === 'string' && competitionOptions.includes(competition)));
+    } catch { /* Ignore damaged device-local preferences. */ }
+  }, []);
+  useEffect(() => {
+    if (!followingLoaded.current) { followingLoaded.current = true; return; }
+    try { localStorage.setItem('matchday-followed-competitions', JSON.stringify(followedCompetitions)); } catch { /* The list still works for this session. */ }
+  }, [followedCompetitions]);
+  useEffect(() => {
+    if (!followingOpen) return;
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!followingMenu.current?.contains(event.target as Node)) setFollowingOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setFollowingOpen(false);
+      followingButton.current?.focus();
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [followingOpen]);
   useEffect(() => {
     if (!openFilter) return;
     function closeOnOutsideClick(event: PointerEvent) {
@@ -165,7 +196,7 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
 
   return <div className="site-shell">
     <div className="score-ticker" aria-label="Selected match ticker"><span className="ticker-live"><i /> {liveCount ? 'LIVE' : 'REAL DATA'}</span>{tickerFixtures.map((fixture) => <span key={fixture.id}>{initials(fixture.home)} <strong>{fixture.status === 'scheduled' ? timeFormatter.format(new Date(fixture.kickoff)) : `${fixture.homeScore ?? 0}–${fixture.awayScore ?? 0}`}</strong> {initials(fixture.away)} <b>{fixture.status === 'finished' ? 'FT' : fixture.status === 'live' ? fixture.minute ?? 'LIVE' : ''}</b></span>)}<span className="ticker-note">Kick-off times shown in UK time</span></div>
-    <header className="topbar"><a className="brand" href="#top" aria-label="Matchday home"><span className="brand-ball" aria-hidden="true">M</span><span>MATCHDAY</span></a><nav aria-label="Primary navigation"><a className="active" href="#scores">Scores</a><a href="#fixtures">Fixtures</a><a href="#tables">Tables</a><a href="#competitions">Competitions</a></nav><div aria-label={`${followedCompetitions.length} followed competitions`} className="menu-button">Following <span>{followedCompetitions.length}</span></div></header>
+    <header className="topbar"><a className="brand" href="#top" aria-label="Matchday home"><span className="brand-ball" aria-hidden="true">M</span><span>MATCHDAY</span></a><nav aria-label="Primary navigation"><a className="active" href="#scores">Scores</a><a href="#fixtures">Fixtures</a><a href="#tables">Tables</a><a href="#competitions">Competitions</a></nav><div className="following-menu" ref={followingMenu}><button aria-controls="following-panel" aria-expanded={followingOpen} className="menu-button" onClick={() => { setOpenFilter(null); setFollowingOpen((open) => !open); }} ref={followingButton} type="button">Following <span>{followedCompetitions.length}</span></button>{followingOpen && <section aria-label="Followed competitions" className="following-panel" id="following-panel"><div className="following-heading"><span>MY FOOTBALL</span><h2>Following</h2></div>{followedCompetitions.length ? <ul>{followedCompetitions.map((competition) => <li key={competition}><span>{competition}</span><button aria-label={`Stop following ${competition}`} onClick={() => toggleFollow(competition)} type="button">Remove</button></li>)}</ul> : <div className="following-empty"><strong>Nothing followed yet</strong><p>Use the ＋ beside any competition to add it here.</p></div>}</section>}</div></header>
     <div className="competition-nav" id="competitions"><div>{quickFilters.map(([label, competitions]) => <button className={selectedCompetitions.length === competitions.length && competitions.every((competition) => selectedCompetitions.includes(competition)) ? 'active' : ''} key={label} onClick={() => setQuickFilter(competitions)} type="button">{label}</button>)}</div></div>
     <main id="top">
       <section className="score-hero" id="scores"><div><p className="eyebrow"><span className="live-dot" /> {dateFixtures.length} matches · {competitionCount} competitions loaded</p><h1>Scores & fixtures</h1><p className="hero-copy">Every match. Every level. One place.</p></div><form className="team-search" onSubmit={submitSearch}><label htmlFor="team-search">Find a football team</label><div><input id="team-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try AFC Telford United" /><button type="submit">Search</button></div></form></section>
@@ -177,7 +208,7 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
         <div className="calendar-grid">{calendarDays.map((date, index) => <button aria-current={date.iso === search.date ? 'date' : undefined} aria-label={longDateFormatter.format(parseDate(date.iso))} autoFocus={date.iso === search.date} className={`${date.outsideMonth ? 'outside-month' : ''} ${date.iso === search.date ? 'selected-date' : ''}`} key={date.iso} onClick={() => chooseDate(date.iso)} tabIndex={date.outsideMonth ? -1 : 0} type="button"><span aria-hidden="true">{date.day}</span>{index < 7 && <span className="sr-only">{weekdayNames[index]}</span>}</button>)}</div>
         <p>Choose any date to update the scores and fixtures shown on the page.</p>
       </dialog>}
-      <section className="fixture-filters" aria-label="Filter visible fixtures" ref={filterBar}><div className="filter-intro"><span>FILTER VIEW</span><strong>{hasFilters ? `${selectedCountries.length + selectedCompetitions.length} selected` : 'All football'}</strong></div><div className="filter-menu"><button aria-controls="country-filter-options" aria-expanded={openFilter === 'countries'} className="filter-summary" onClick={() => setOpenFilter((current) => current === 'countries' ? null : 'countries')} ref={countryFilterButton} type="button"><span>Countries</span><b>{selectedCountries.length || 'All'}</b></button>{openFilter === 'countries' && <div aria-label="Countries" className="filter-options" id="country-filter-options" role="group">{countryOptions.map((country) => <label key={country}><input checked={selectedCountries.includes(country)} onChange={() => toggleSelection('countries', country)} type="checkbox" /><span>{country}</span></label>)}</div>}</div><div className="filter-menu"><button aria-controls="competition-filter-options" aria-expanded={openFilter === 'competitions'} className="filter-summary" onClick={() => setOpenFilter((current) => current === 'competitions' ? null : 'competitions')} ref={competitionFilterButton} type="button"><span>Competitions</span><b>{selectedCompetitions.length || 'All'}</b></button>{openFilter === 'competitions' && <div aria-label="Competitions" className="filter-options" id="competition-filter-options" role="group">{competitionOptions.map((competition) => <label key={competition}><input checked={selectedCompetitions.includes(competition)} onChange={() => toggleSelection('competitions', competition)} type="checkbox" /><span>{competition}</span></label>)}</div>}</div>{hasFilters && <button className="clear-filters" type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, countries: undefined, competitions: undefined }) })}>Clear filters</button>}</section>
+      <section className="fixture-filters" aria-label="Filter visible fixtures" ref={filterBar}><div className="filter-intro"><span>FILTER VIEW</span><strong>{hasFilters ? `${selectedCountries.length + selectedCompetitions.length} selected` : 'All football'}</strong></div><div className="filter-menu"><button aria-controls="country-filter-options" aria-expanded={openFilter === 'countries'} className="filter-summary" onClick={() => { setFollowingOpen(false); setOpenFilter((current) => current === 'countries' ? null : 'countries'); }} ref={countryFilterButton} type="button"><span>Countries</span><b>{selectedCountries.length || 'All'}</b></button>{openFilter === 'countries' && <div aria-label="Countries" className="filter-options" id="country-filter-options" role="group">{countryOptions.map((country) => <label key={country}><input checked={selectedCountries.includes(country)} onChange={() => toggleSelection('countries', country)} type="checkbox" /><span>{country}</span></label>)}</div>}</div><div className="filter-menu"><button aria-controls="competition-filter-options" aria-expanded={openFilter === 'competitions'} className="filter-summary" onClick={() => { setFollowingOpen(false); setOpenFilter((current) => current === 'competitions' ? null : 'competitions'); }} ref={competitionFilterButton} type="button"><span>Competitions</span><b>{selectedCompetitions.length || 'All'}</b></button>{openFilter === 'competitions' && <div aria-label="Competitions" className="filter-options" id="competition-filter-options" role="group">{competitionOptions.map((competition) => <label key={competition}><input checked={selectedCompetitions.includes(competition)} onChange={() => toggleSelection('competitions', competition)} type="checkbox" /><span>{competition}</span></label>)}</div>}</div>{hasFilters && <button className="clear-filters" type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, countries: undefined, competitions: undefined }) })}>Clear filters</button>}</section>
       <div className="mobile-filter-row" aria-label="Match status filter">{(['all', 'live', 'upcoming'] as const).map((status) => <button className={search.status === status ? 'active' : ''} key={status} onClick={() => void navigate({ search: (previous) => ({ ...previous, status }) })} type="button">{status}</button>)}</div>
       <div className="content-grid" id="fixtures"><div className="results-column">
         <div className="results-toolbar"><div><p>{selectedTeam ? 'TEAM VIEW' : 'MATCH CENTRE'}</p><h2>{heading}</h2></div>{selectedTeam && <button type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, team: undefined }) })}>Clear team ×</button>}<span>{filteredFixtures.length} matches</span></div>
