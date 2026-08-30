@@ -70,6 +70,8 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(search.date.slice(0, 7));
   const [selectedFixture, setSelectedFixture] = useState<Fixture>();
+  const [toolsDialogOpen, setToolsDialogOpen] = useState(false);
+  const [toolsStatus, setToolsStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [followedCompetitions, setFollowedCompetitions] = useState<string[]>([]);
   const [followedTeams, setFollowedTeams] = useState<string[]>([]);
   const [followingOnly, setFollowingOnly] = useState(false);
@@ -78,6 +80,8 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const [openFilter, setOpenFilter] = useState<'countries' | 'competitions' | null>(null);
   const calendarDialog = useRef<HTMLDialogElement>(null);
   const fixtureDialog = useRef<HTMLDialogElement>(null);
+  const toolsDialog = useRef<HTMLDialogElement>(null);
+  const toolsDialogTrigger = useRef<HTMLButtonElement>(null);
   const searchMenu = useRef<HTMLFormElement>(null);
   const followingMenu = useRef<HTMLDivElement>(null);
   const followingButton = useRef<HTMLButtonElement>(null);
@@ -96,6 +100,10 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     calendarDialog.current?.showModal();
   }, [calendarOpen, search.date]);
   useEffect(() => { selectedFixture && fixtureDialog.current?.showModal(); }, [selectedFixture]);
+  useEffect(() => {
+    setToolsStatus(typeof document.modelContext?.registerTool === 'function' ? 'ready' : 'unavailable');
+  }, []);
+  useEffect(() => { toolsDialogOpen && toolsDialog.current?.showModal(); }, [toolsDialogOpen]);
   useEffect(() => {
     if (!searchOpen) return;
     function closeSearch(event: PointerEvent) {
@@ -300,12 +308,22 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
         </section>)}
         <p className="data-note">{dataSource} · {fixtures.length.toLocaleString('en-GB')} fixtures · Imported {updateFormatter.format(new Date(dataUpdatedAt))}</p>
       </div><aside className="sidebar">
-        <section className="agent-card"><div className="agent-topline"><span className="agent-badge">SITE TOOLS READY</span><i aria-hidden="true" /></div><h2>Just ask Matchday</h2><p>Your browser agent can cut through every league, date and fixture—without making you navigate them one by one.</p><ul><li>“When do Liverpool play next?”</li><li>“Only show English non-league football.”</li></ul><div className="tool-count"><strong>5</strong><span>structured tools available</span></div></section>
+        <section className="agent-card"><div className="agent-topline"><span className={`agent-badge ${toolsStatus}`}>{toolsStatus === 'ready' ? 'SITE TOOLS READY' : toolsStatus === 'unavailable' ? 'BROWSING MODE' : 'CHECKING SITE TOOLS'}</span><i aria-hidden="true" className={toolsStatus} /></div><h2>Just ask ChatGPT</h2><p>{toolsStatus === 'ready' ? 'ChatGPT can answer from Matchday’s structured football data or change this page for you.' : 'Browse Matchday normally. Site tools appear when the page is opened in a WebMCP-compatible ChatGPT browser.'}</p><ul><li>“When do Liverpool play next?”</li><li>“Only show English non-league football.”</li></ul><div className="tool-count"><div><strong>5</strong><span>structured capabilities</span></div><button aria-haspopup="dialog" onClick={() => setToolsDialogOpen(true)} ref={toolsDialogTrigger} type="button">How it works <span aria-hidden="true">→</span></button></div></section>
         <section className="filter-card"><h2>Match filter</h2>{(['all', 'live', 'upcoming'] as const).map((status) => <button className={search.status === status ? 'active' : ''} key={status} onClick={() => void navigate({ search: (previous) => ({ ...previous, status }) })} type="button"><span>{status === 'all' ? 'All matches' : status === 'live' ? 'Live now' : 'Upcoming'}</span><b>{status === 'all' ? scopedFixtures.length : scopedFixtures.filter((fixture) => status === 'live' ? fixture.status === 'live' : fixture.status === 'scheduled').length}</b></button>)}</section>
         <section className="table-card" id="tables"><div className="sidebar-heading"><div><span>TABLE</span><h2>Premier League</h2></div><span>Top five</span></div><div className="table-head"><span>POS</span><span>TEAM</span><span>GD</span><span>PTS</span></div>{standings.map(([team, points, difference], index) => <div className="standing-row" key={team}><b>{index + 1}</b><span><i>{initials(team)}</i>{team}</span><em>{difference > 0 ? '+' : ''}{difference}</em><strong>{points}</strong></div>)}</section>
       </aside></div>
       <section className="accessibility-story"><div className="story-number">01</div><div><p>WHY SITE TOOLS?</p><h2>The full fixture list stays. The obstacle course doesn’t.</h2></div><p>Matchday keeps the rich, familiar scores interface for browsing while giving agents a direct, structured path to the answer.</p></section>
     </main>
+    {toolsDialogOpen && <dialog aria-describedby="tools-dialog-summary" aria-labelledby="tools-dialog-title" className="tools-dialog" onCancel={(event) => { event.preventDefault(); setToolsDialogOpen(false); requestAnimationFrame(() => toolsDialogTrigger.current?.focus()); }} ref={toolsDialog}>
+      <div className="tools-dialog-heading"><div><span>WEBMCP EXPLAINED</span><h2 id="tools-dialog-title">Use Matchday with ChatGPT</h2></div><button aria-label="Close how Matchday works" onClick={() => { setToolsDialogOpen(false); requestAnimationFrame(() => toolsDialogTrigger.current?.focus()); }} type="button">×</button></div>
+      <div className="tools-dialog-content">
+        <div className={`tools-connection ${toolsStatus}`}><i aria-hidden="true" /><div><strong>{toolsStatus === 'ready' ? 'Connected and ready' : toolsStatus === 'checking' ? 'Checking for site tools' : 'Site tools are not available in this browser'}</strong><p id="tools-dialog-summary">{toolsStatus === 'ready' ? 'ChatGPT can use Matchday’s structured tools while this page is open.' : 'You can still use every normal search, filter and following feature on the page.'}</p></div></div>
+        <section><span className="dialog-eyebrow">HOW TO USE IT</span><h3>Ask ChatGPT while Matchday is open</h3><ol className="tools-steps"><li><b>1</b><span><strong>Ask in your own words</strong><small>There is no special command or syntax to remember.</small></span></li><li><b>2</b><span><strong>ChatGPT chooses the right site tool</strong><small>It reads structured fixture data instead of making you navigate every link.</small></span></li><li><b>3</b><span><strong>Get an answer or update the page</strong><small>Ask for an answer, or tell ChatGPT to show the matching fixtures here.</small></span></li></ol></section>
+        <section><span className="dialog-eyebrow">WHAT IT CAN DO</span><h3>Five useful capabilities</h3><ul className="capability-list"><li><b>01</b><span><strong>Find a team</strong><small>Recognise partial names and common aliases.</small></span></li><li><b>02</b><span><strong>Retrieve fixtures and results</strong><small>Answer questions about a team’s schedule or latest score.</small></span></li><li><b>03</b><span><strong>Show a team on the page</strong><small>Switch Matchday to the relevant team view.</small></span></li><li><b>04</b><span><strong>Discover what is covered</strong><small>List available countries and competitions.</small></span></li><li><b>05</b><span><strong>Change match filters</strong><small>Set dates, status, countries, competitions or Following only.</small></span></li></ul></section>
+        <section><span className="dialog-eyebrow">TRY ASKING</span><h3>Natural questions work best</h3><div className="prompt-grid"><p>“When do Liverpool play next?”</p><p>“What was AFC Telford’s latest result?”</p><p>“Show only Scottish competitions this weekend.”</p><p>“Show matches involving teams I follow.”</p></div></section>
+        <aside className="tools-safety-note"><strong>Safe by design</strong><p>These tools only read football data and adjust Matchday’s view. Nothing is purchased, published or sent to another person.</p></aside>
+      </div>
+    </dialog>}
     {selectedFixture && <dialog aria-labelledby="fixture-dialog-title" className="fixture-dialog" onCancel={() => setSelectedFixture(undefined)} onClose={() => setSelectedFixture(undefined)} ref={fixtureDialog}>
       <div className="fixture-dialog-heading"><div><span>{selectedFixture.competitionShort} · {selectedFixture.competition}</span><h2 id="fixture-dialog-title">Match details</h2></div><button aria-label="Close match details" onClick={() => setSelectedFixture(undefined)} type="button">×</button></div>
       <div className="fixture-dialog-score"><div><i>{initials(selectedFixture.home)}</i><strong>{selectedFixture.home}</strong><button aria-pressed={followedTeams.includes(selectedFixture.home)} onClick={() => toggleFollowTeam(selectedFixture.home)} type="button">{followedTeams.includes(selectedFixture.home) ? 'Following ✓' : 'Follow ＋'}</button></div><p>{selectedFixture.status === 'scheduled' ? timeFormatter.format(new Date(selectedFixture.kickoff)) : `${selectedFixture.homeScore}–${selectedFixture.awayScore}`}<span>{selectedFixture.status === 'finished' ? 'Full time' : selectedFixture.status === 'live' ? selectedFixture.minute : longDateFormatter.format(parseDate(fixtureDate(selectedFixture)))}</span></p><div><i>{initials(selectedFixture.away)}</i><strong>{selectedFixture.away}</strong><button aria-pressed={followedTeams.includes(selectedFixture.away)} onClick={() => toggleFollowTeam(selectedFixture.away)} type="button">{followedTeams.includes(selectedFixture.away) ? 'Following ✓' : 'Follow ＋'}</button></div></div>
