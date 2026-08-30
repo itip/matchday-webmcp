@@ -37,4 +37,4 @@ export const teamAliases: Record<string, string> = Object.fromEntries(
   ]),
 );
 export const standings: Array<[string, number, number]> = [['Arsenal', 6, 6], ['Liverpool', 4, 2], ['Chelsea', 4, 2], ['Newcastle', 3, 1], ['Brighton', 3, 0]];
-export function resolveTeam(query: string) { const normalized = query.trim().toLowerCase(); if (teamAliases[normalized]) return teamAliases[normalized]; const teams = [...new Set(fixtures.flatMap((fixture) => [fixture.home, fixture.away]))]; return teams.find((team) => team.toLowerCase().includes(normalized)); }
+export function resolveTeam(query: string) { const normalized = query.trim().toLowerCase(); if (!normalized) return undefined; if (teamAliases[normalized]) return teamAliases[normalized]; const teams = [...new Set(fixtures.flatMap((fixture) => [fixture.home, fixture.away]))]; return teams.find((team) => team.toLowerCase().includes(normalized)); }
