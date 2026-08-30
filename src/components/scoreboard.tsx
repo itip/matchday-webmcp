@@ -56,8 +56,12 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const [calendarMonth, setCalendarMonth] = useState(search.date.slice(0, 7));
   const [selectedFixture, setSelectedFixture] = useState<Fixture>();
   const [followedCompetitions, setFollowedCompetitions] = useState<string[]>([]);
+  const [openFilter, setOpenFilter] = useState<'countries' | 'competitions' | null>(null);
   const calendarDialog = useRef<HTMLDialogElement>(null);
   const fixtureDialog = useRef<HTMLDialogElement>(null);
+  const filterBar = useRef<HTMLElement>(null);
+  const countryFilterButton = useRef<HTMLButtonElement>(null);
+  const competitionFilterButton = useRef<HTMLButtonElement>(null);
   const searchState = useRef(search);
   useEffect(() => setQuery(search.team ?? ''), [search.team]);
   useEffect(() => { searchState.current = search; }, [search]);
@@ -67,6 +71,24 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     calendarDialog.current?.showModal();
   }, [calendarOpen, search.date]);
   useEffect(() => { selectedFixture && fixtureDialog.current?.showModal(); }, [selectedFixture]);
+  useEffect(() => {
+    if (!openFilter) return;
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!filterBar.current?.contains(event.target as Node)) setOpenFilter(null);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      const trigger = openFilter === 'countries' ? countryFilterButton.current : competitionFilterButton.current;
+      setOpenFilter(null);
+      trigger?.focus();
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [openFilter]);
   const selectedTeam = search.team ? resolveTeam(search.team) : undefined;
   const selectedCountries = parseSelection(search.countries);
   const selectedCompetitions = parseSelection(search.competitions);
@@ -155,7 +177,7 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
         <div className="calendar-grid">{calendarDays.map((date, index) => <button aria-current={date.iso === search.date ? 'date' : undefined} aria-label={longDateFormatter.format(parseDate(date.iso))} autoFocus={date.iso === search.date} className={`${date.outsideMonth ? 'outside-month' : ''} ${date.iso === search.date ? 'selected-date' : ''}`} key={date.iso} onClick={() => chooseDate(date.iso)} tabIndex={date.outsideMonth ? -1 : 0} type="button"><span aria-hidden="true">{date.day}</span>{index < 7 && <span className="sr-only">{weekdayNames[index]}</span>}</button>)}</div>
         <p>Choose any date to update the scores and fixtures shown on the page.</p>
       </dialog>}
-      <section className="fixture-filters" aria-label="Filter visible fixtures"><div className="filter-intro"><span>FILTER VIEW</span><strong>{hasFilters ? `${selectedCountries.length + selectedCompetitions.length} selected` : 'All football'}</strong></div><details><summary>Countries <b>{selectedCountries.length || 'All'}</b></summary><div className="filter-options">{countryOptions.map((country) => <label key={country}><input checked={selectedCountries.includes(country)} onChange={() => toggleSelection('countries', country)} type="checkbox" /><span>{country}</span></label>)}</div></details><details><summary>Competitions <b>{selectedCompetitions.length || 'All'}</b></summary><div className="filter-options">{competitionOptions.map((competition) => <label key={competition}><input checked={selectedCompetitions.includes(competition)} onChange={() => toggleSelection('competitions', competition)} type="checkbox" /><span>{competition}</span></label>)}</div></details>{hasFilters && <button className="clear-filters" type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, countries: undefined, competitions: undefined }) })}>Clear filters</button>}</section>
+      <section className="fixture-filters" aria-label="Filter visible fixtures" ref={filterBar}><div className="filter-intro"><span>FILTER VIEW</span><strong>{hasFilters ? `${selectedCountries.length + selectedCompetitions.length} selected` : 'All football'}</strong></div><div className="filter-menu"><button aria-controls="country-filter-options" aria-expanded={openFilter === 'countries'} className="filter-summary" onClick={() => setOpenFilter((current) => current === 'countries' ? null : 'countries')} ref={countryFilterButton} type="button"><span>Countries</span><b>{selectedCountries.length || 'All'}</b></button>{openFilter === 'countries' && <div aria-label="Countries" className="filter-options" id="country-filter-options" role="group">{countryOptions.map((country) => <label key={country}><input checked={selectedCountries.includes(country)} onChange={() => toggleSelection('countries', country)} type="checkbox" /><span>{country}</span></label>)}</div>}</div><div className="filter-menu"><button aria-controls="competition-filter-options" aria-expanded={openFilter === 'competitions'} className="filter-summary" onClick={() => setOpenFilter((current) => current === 'competitions' ? null : 'competitions')} ref={competitionFilterButton} type="button"><span>Competitions</span><b>{selectedCompetitions.length || 'All'}</b></button>{openFilter === 'competitions' && <div aria-label="Competitions" className="filter-options" id="competition-filter-options" role="group">{competitionOptions.map((competition) => <label key={competition}><input checked={selectedCompetitions.includes(competition)} onChange={() => toggleSelection('competitions', competition)} type="checkbox" /><span>{competition}</span></label>)}</div>}</div>{hasFilters && <button className="clear-filters" type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, countries: undefined, competitions: undefined }) })}>Clear filters</button>}</section>
       <div className="mobile-filter-row" aria-label="Match status filter">{(['all', 'live', 'upcoming'] as const).map((status) => <button className={search.status === status ? 'active' : ''} key={status} onClick={() => void navigate({ search: (previous) => ({ ...previous, status }) })} type="button">{status}</button>)}</div>
       <div className="content-grid" id="fixtures"><div className="results-column">
         <div className="results-toolbar"><div><p>{selectedTeam ? 'TEAM VIEW' : 'MATCH CENTRE'}</p><h2>{heading}</h2></div>{selectedTeam && <button type="button" onClick={() => void navigate({ search: (previous) => ({ ...previous, team: undefined }) })}>Clear team ×</button>}<span>{filteredFixtures.length} matches</span></div>
