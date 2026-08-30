@@ -4,6 +4,8 @@ An accessible football scores and fixtures experience built for people and AI ag
 
 Matchday demonstrates how [WebMCP](https://webmachinelearning.github.io/webmcp/) can give ChatGPT a direct, structured route to football information without forcing a user or an agent to navigate a long, link-heavy fixture page one item at a time.
 
+**[Open the public Matchday demo](https://matchday-webmcp.ian-tipton.workers.dev/)**
+
 The project was inspired by a blind football supporter who finds conventional scores and fixtures pages cumbersome with a screen reader—particularly when looking for lower-league clubs such as AFC Telford United.
 
 ## What Matchday does
@@ -114,7 +116,9 @@ For the first public deployment, connect this GitHub repository in Cloudflare or
 
 ## Accessibility
 
-Matchday is designed around semantic headings and landmarks, labelled controls, keyboard-operable autocomplete and filters, focus-managed modal dialogs, screen-reader announcements and persistent user preferences. A full accessibility audit is planned before the competition submission.
+Matchday is designed around semantic headings and landmarks, labelled controls, keyboard-operable autocomplete and filters, a skip link, persistent high-contrast focus indicators, focus-managed modal dialogs, announced state changes and a screen-reader-readable standings table.
+
+The public deployment was audited on 30 August 2026 for accessible names, landmark and heading structure, ARIA references and state, keyboard focus management, modal behaviour, text contrast and WebMCP operation. Accessibility should still be tested with real users and their preferred assistive technology; automated and developer checks are not a substitute for that experience.
 
 ## Data and trademarks
 
