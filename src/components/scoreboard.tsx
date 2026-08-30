@@ -3,9 +3,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { competitionCount, dataSource, dataUpdatedAt, fixtures, resolveTeam, standings, type Fixture } from '../data/fixtures';
 
 type ScoresSearch = { date: string; team?: string; status: 'all' | 'live' | 'upcoming'; countries?: string; competitions?: string };
+type SearchSuggestion = { id: string; type: 'team' | 'competition'; name: string; context: string; followed: boolean };
 const countryOptions = [...new Set(fixtures.map((fixture) => fixture.competitionShort))].sort();
 const competitionOptions = [...new Set(fixtures.map((fixture) => fixture.competition))].sort();
 const teamOptions = [...new Set(fixtures.flatMap((fixture) => [fixture.home, fixture.away]))].sort();
+const teamContexts = Object.fromEntries(teamOptions.map((team) => [team, fixtures.find((fixture) => fixture.home === team || fixture.away === team)?.competitionShort ?? 'Football']));
+const competitionContexts = Object.fromEntries(competitionOptions.map((competition) => [competition, fixtures.find((fixture) => fixture.competition === competition)?.competitionShort ?? 'Football']));
 const quickFilters: Array<[string, string[]]> = [['Top matches', []], ['Premier League', ['Premier League']], ['Championship', ['Championship']], ['League One', ['League One']], ['League Two', ['League Two']], ['Non-League', ['Enterprise National League', 'Enterprise National League North']]];
 const timeFormatter = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/London' });
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' });
@@ -48,10 +51,21 @@ function groupFixtures(list: Fixture[]) { return list.reduce<Record<string, Fixt
 function parseSelection(value?: string) { return value ? value.split('|').filter(Boolean) : []; }
 function encodeSelection(values: string[]) { return values.length ? values.join('|') : undefined; }
 function canonicalSelections(values: string[], options: string[]) { return values.map((value) => options.find((option) => option.toLowerCase() === value.toLowerCase())).filter((value): value is string => Boolean(value)); }
+function normalizeSearch(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+function rankedMatches(options: string[], query: string, limit: number) {
+  const normalizedQuery = normalizeSearch(query);
+  return options.filter((option) => normalizeSearch(option).includes(normalizedQuery)).sort((a, b) => {
+    const aStarts = normalizeSearch(a).startsWith(normalizedQuery) ? 0 : 1;
+    const bStarts = normalizeSearch(b).startsWith(normalizedQuery) ? 0 : 1;
+    return aStarts - bStarts || a.length - b.length || a.localeCompare(b);
+  }).slice(0, limit);
+}
 
 export function Scoreboard({ search }: { search: ScoresSearch }) {
   const navigate = useNavigate({ from: '/' });
   const [query, setQuery] = useState(search.team ?? '');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [announcement, setAnnouncement] = useState('');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(search.date.slice(0, 7));
@@ -64,6 +78,7 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const [openFilter, setOpenFilter] = useState<'countries' | 'competitions' | null>(null);
   const calendarDialog = useRef<HTMLDialogElement>(null);
   const fixtureDialog = useRef<HTMLDialogElement>(null);
+  const searchMenu = useRef<HTMLFormElement>(null);
   const followingMenu = useRef<HTMLDivElement>(null);
   const followingButton = useRef<HTMLButtonElement>(null);
   const countryFilterMenu = useRef<HTMLDivElement>(null);
@@ -81,6 +96,14 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     calendarDialog.current?.showModal();
   }, [calendarOpen, search.date]);
   useEffect(() => { selectedFixture && fixtureDialog.current?.showModal(); }, [selectedFixture]);
+  useEffect(() => {
+    if (!searchOpen) return;
+    function closeSearch(event: PointerEvent) {
+      if (!searchMenu.current?.contains(event.target as Node)) setSearchOpen(false);
+    }
+    document.addEventListener('pointerdown', closeSearch);
+    return () => document.removeEventListener('pointerdown', closeSearch);
+  }, [searchOpen]);
   useEffect(() => {
     try {
       const legacyCompetitions = JSON.parse(localStorage.getItem('matchday-followed-competitions') ?? '[]');
@@ -155,6 +178,13 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
   const weekDates = getWeekDates(search.date);
   const calendarDays = getCalendarDays(calendarMonth);
   const calendarMonthDate = parseDate(`${calendarMonth}-01`);
+  const searchSuggestions = useMemo<SearchSuggestion[]>(() => {
+    if (normalizeSearch(query).length < 2) return [];
+    const teams = rankedMatches(teamOptions, query, 6).map((name) => ({ id: `team-${name}`, type: 'team' as const, name, context: teamContexts[name], followed: followedTeams.includes(name) }));
+    const competitions = rankedMatches(competitionOptions, query, 4).map((name) => ({ id: `competition-${name}`, type: 'competition' as const, name, context: competitionContexts[name], followed: followedCompetitions.includes(name) }));
+    return [...teams, ...competitions];
+  }, [query, followedTeams, followedCompetitions]);
+  useEffect(() => { setActiveSuggestion(0); }, [query]);
 
   useEffect(() => {
     if (typeof document.modelContext?.registerTool !== 'function') return;
@@ -192,7 +222,33 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     return () => controller.abort();
   }, [navigate]);
 
-  function submitSearch(event: React.FormEvent) { event.preventDefault(); const team = resolveTeam(query); if (!team) { setAnnouncement(`No team matched ${query || 'that search'}. Try Liverpool or AFC Telford United.`); return; } void navigate({ search: (previous) => ({ ...previous, team, status: 'all', countries: undefined, competitions: undefined }) }); setAnnouncement(`Showing fixtures for ${team}.`); }
+  async function selectSuggestion(suggestion: SearchSuggestion) {
+    setSearchOpen(false);
+    setFollowingOnly(false);
+    if (suggestion.type === 'team') {
+      await navigate({ search: (previous) => ({ ...previous, team: suggestion.name, status: 'all', countries: undefined, competitions: undefined }) });
+      setAnnouncement(`Showing fixtures for ${suggestion.name}.`);
+    } else {
+      await navigate({ search: (previous) => ({ ...previous, team: undefined, status: 'all', competitions: encodeSelection([suggestion.name]) }) });
+      setAnnouncement(`Showing ${suggestion.name} fixtures.`);
+    }
+    setQuery(suggestion.name);
+  }
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') { event.preventDefault(); setSearchOpen(true); setActiveSuggestion((index) => searchSuggestions.length ? (index + 1) % searchSuggestions.length : 0); }
+    if (event.key === 'ArrowUp') { event.preventDefault(); setSearchOpen(true); setActiveSuggestion((index) => searchSuggestions.length ? (index - 1 + searchSuggestions.length) % searchSuggestions.length : 0); }
+    if (event.key === 'Enter' && searchOpen && searchSuggestions[activeSuggestion]) { event.preventDefault(); void selectSuggestion(searchSuggestions[activeSuggestion]); }
+    if (event.key === 'Escape' && searchOpen) { event.preventDefault(); setSearchOpen(false); }
+  }
+  function submitSearch(event: React.FormEvent) {
+    event.preventDefault();
+    if (searchOpen && searchSuggestions[activeSuggestion]) { void selectSuggestion(searchSuggestions[activeSuggestion]); return; }
+    const team = resolveTeam(query);
+    if (team) { void selectSuggestion({ id: `team-${team}`, type: 'team', name: team, context: teamContexts[team], followed: followedTeams.includes(team) }); return; }
+    const competition = rankedMatches(competitionOptions, query, 1)[0];
+    if (competition) { void selectSuggestion({ id: `competition-${competition}`, type: 'competition', name: competition, context: competitionContexts[competition], followed: followedCompetitions.includes(competition) }); return; }
+    setAnnouncement(`No team or competition matched ${query || 'that search'}. Try Liverpool, Telford, or Premier League.`);
+  }
   function toggleSelection(kind: 'countries' | 'competitions', value: string) { const selected = kind === 'countries' ? selectedCountries : selectedCompetitions; const next = selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value]; void navigate({ search: (previous) => ({ ...previous, [kind]: encodeSelection(next) }) }); }
   function setQuickFilter(competitions: string[]) { void navigate({ search: (previous) => ({ ...previous, competitions: encodeSelection(competitions) }) }); }
   function chooseDate(date: string) {
@@ -218,7 +274,7 @@ export function Scoreboard({ search }: { search: ScoresSearch }) {
     <header className="topbar"><a className="brand" href="#top" aria-label="Matchday home"><span className="brand-ball" aria-hidden="true">M</span><span>MATCHDAY</span></a><nav aria-label="Primary navigation"><a className="active" href="#scores">Scores</a><a href="#fixtures">Fixtures</a><a href="#tables">Tables</a><a href="#competitions">Competitions</a></nav><div className="following-menu" ref={followingMenu}><button aria-controls="following-panel" aria-expanded={followingOpen} className="menu-button" onClick={() => { setOpenFilter(null); setFollowingOpen((open) => !open); }} ref={followingButton} type="button">Following <span>{followingCount}</span></button>{followingOpen && <section aria-label="Following preferences" className="following-panel" id="following-panel"><div className="following-heading"><span>MY FOOTBALL</span><h2>Following</h2></div><div aria-label="Match list view" className="following-view" role="group"><button aria-pressed={!followingOnly} onClick={() => { setFollowingOnly(false); setAnnouncement('Showing all matches.'); }} type="button">All matches</button><button aria-pressed={followingOnly} onClick={() => { setFollowingOnly(true); setAnnouncement('Showing matches from followed teams and competitions.'); }} type="button">Following only</button></div>{followingCount ? <div className="following-lists">{followedCompetitions.length > 0 && <div><h3>Competitions</h3><ul>{followedCompetitions.map((competition) => <li key={competition}><span>{competition}</span><button aria-label={`Stop following ${competition}`} onClick={() => toggleFollow(competition)} type="button">Remove</button></li>)}</ul></div>}{followedTeams.length > 0 && <div><h3>Teams</h3><ul>{followedTeams.map((team) => <li key={team}><span>{team}</span><button aria-label={`Stop following ${team}`} onClick={() => toggleFollowTeam(team)} type="button">Remove</button></li>)}</ul></div>}</div> : <div className="following-empty"><strong>Nothing followed yet</strong><p>Follow a competition with ＋, or follow a team from its fixtures or match details.</p></div>}</section>}</div></header>
     <div className="competition-nav" id="competitions"><div>{quickFilters.map(([label, competitions]) => <button className={selectedCompetitions.length === competitions.length && competitions.every((competition) => selectedCompetitions.includes(competition)) ? 'active' : ''} key={label} onClick={() => setQuickFilter(competitions)} type="button">{label}</button>)}</div></div>
     <main id="top">
-      <section className="score-hero" id="scores"><div><p className="eyebrow"><span className="live-dot" /> {dateFixtures.length} matches · {competitionCount} competitions loaded</p><h1>Scores & fixtures</h1><p className="hero-copy">Every match. Every level. One place.</p></div><form className="team-search" onSubmit={submitSearch}><label htmlFor="team-search">Find a football team</label><div><input id="team-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try AFC Telford United" /><button type="submit">Search</button></div></form></section>
+      <section className="score-hero" id="scores"><div><p className="eyebrow"><span className="live-dot" /> {dateFixtures.length} matches · {competitionCount} competitions loaded</p><h1>Scores & fixtures</h1><p className="hero-copy">Every match. Every level. One place.</p></div><form className="team-search" onSubmit={submitSearch} ref={searchMenu}><label htmlFor="team-search">Find a team or competition</label><div className="search-input-row"><input aria-activedescendant={searchOpen && searchSuggestions.length ? `team-search-option-${activeSuggestion}` : undefined} aria-autocomplete="list" aria-controls="team-search-suggestions" aria-describedby="team-search-help" aria-expanded={searchOpen && normalizeSearch(query).length >= 2} autoComplete="off" id="team-search" onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }} onFocus={() => normalizeSearch(query).length >= 2 && setSearchOpen(true)} onKeyDown={handleSearchKeyDown} placeholder="Try Telford or Premier League" role="combobox" type="search" value={query} /><button type="submit">Search</button></div><span className="sr-only" id="team-search-help">Type at least two characters. Use the up and down arrow keys to review suggestions, Enter to select, and Escape to close.</span>{searchOpen && normalizeSearch(query).length >= 2 && <div className="search-suggestions" id="team-search-suggestions" role="listbox">{searchSuggestions.length ? (['team', 'competition'] as const).map((type) => { const suggestions = searchSuggestions.filter((suggestion) => suggestion.type === type); if (!suggestions.length) return null; return <div aria-labelledby={`suggestion-heading-${type}`} className="suggestion-group" key={type} role="group"><p id={`suggestion-heading-${type}`}>{type === 'team' ? 'Teams' : 'Competitions'}</p>{suggestions.map((suggestion) => { const index = searchSuggestions.indexOf(suggestion); return <div aria-label={`${suggestion.name}, ${type}, ${suggestion.context}${suggestion.followed ? ', followed' : ''}`} aria-selected={activeSuggestion === index} className="search-option" id={`team-search-option-${index}`} key={suggestion.id} onClick={() => selectSuggestion(suggestion)} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setActiveSuggestion(index)} role="option"><i aria-hidden="true">{type === 'team' ? initials(suggestion.name) : suggestion.context.slice(0, 1)}</i><span><strong>{suggestion.name}</strong><small>{suggestion.context} · {type === 'team' ? 'Team' : 'Competition'}</small></span>{suggestion.followed && <b>FOLLOWING</b>}</div>; })}</div>; }) : <div className="search-empty">No teams or competitions found.</div>}</div>}<span aria-live="polite" className="sr-only">{searchOpen && normalizeSearch(query).length >= 2 ? `${searchSuggestions.length} suggestions available.` : ''}</span></form></section>
       <section className="date-strip" aria-label="Choose a date">{weekDates.map(({ day, date, iso }) => <button aria-current={!selectedTeam && search.date === iso ? 'date' : undefined} aria-label={longDateFormatter.format(parseDate(iso))} className={!selectedTeam && search.date === iso ? 'selected' : ''} key={iso} onClick={() => chooseDate(iso)} type="button"><span>{day}</span><strong>{date}</strong></button>)}<button aria-haspopup="dialog" className="calendar-button" onClick={() => setCalendarOpen(true)} type="button"><span>CAL</span><strong aria-hidden="true">▦</strong><span className="sr-only">Open calendar</span></button></section>
       {calendarOpen && <dialog aria-labelledby="calendar-title" className="calendar-dialog" onCancel={() => setCalendarOpen(false)} onClose={() => setCalendarOpen(false)} ref={calendarDialog}>
         <div className="calendar-heading"><div><span>CHOOSE A DATE</span><h2 id="calendar-title">{monthFormatter.format(calendarMonthDate)}</h2></div><button aria-label="Close calendar" className="calendar-close" onClick={() => setCalendarOpen(false)} type="button">×</button></div>
